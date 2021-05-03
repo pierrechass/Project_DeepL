@@ -1,36 +1,43 @@
 from utilities import utilities
-import framework
+import framework as frk
 import torch
 
-lin = framework.Linear(4,1, randType = 'normal', randArg1 = 0., randArg2 = 1.)
-sigma = framework.tanh()
-loss = framework.MSE()
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-inp = torch.ones([4])
+# lin = framework.Linear(4,1, randType = 'normal', randArg1 = 0., randArg2 = 1.)
+# sigma = framework.tanh()
+# loss = framework.MSE()
 
-inp2 = torch.zeros(4)
-inp2[0] = 1.
+# util = utilities()
 
-target = 1.
+# inp = torch.ones([4])
 
+# inp2 = torch.zeros(4)
+# inp2[0] = 1.
 
-for i in range(30):
+# target = 1.
 
-    #lin.reset_gradients()
+# train = util.create_datasets(plot=True)
 
-    print("param = ",lin.param())
-    out = lin.forward_pass(inp2)
-    out = sigma.forward_pass(out)
-    loss_act = loss.forward_pass(out,target)
+# for i in range(30):
 
-    dl_dx = loss.backward_pass(out,target)
-    dl_ds = sigma.backward_pass(dl_dx)
-    lin.backward_pass(dl_ds)
+#     #lin.reset_gradients()
 
-    lin.gradient_step(0.015)
+#     print("param = ",lin.param())
+#     out = lin.forward_pass(inp2)
+#     out = sigma.forward_pass(out)
+#     loss_act = loss.forward_pass(out,target)
 
-    print(out)
-    print(loss_act)
+#     dl_dx = loss.backward_pass(out,target)
+#     dl_ds = sigma.backward_pass(dl_dx)
+#     lin.backward_pass(dl_ds)
 
+#     lin.gradient_step(0.015)
 
+#     print(out)
+#     print(loss_act)
+
+model = frk.Sequential(frk.lossMSE(), frk.Linear(10,10), frk.reLU(), frk.Linear(10,5), frk.reLU())
+print(model.param())
 

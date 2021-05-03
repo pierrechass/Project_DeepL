@@ -70,7 +70,7 @@ class Linear(Module) :
         
 
 ###################################
-##     tanh activation layer     ##
+##       activation layers       ##
 ###################################
 
 class tanh(Module):
@@ -85,6 +85,9 @@ class tanh(Module):
     def backward_pass(self, dl_dx):
         dtanh = 4 * (self.s.exp() + self.s.mul(-1).exp()).pow(-2)
         return dtanh * dl_dx
+    
+    def param(self):
+        return [self.s]
 
 class reLU(Module):
     def __init__(self):
@@ -94,18 +97,62 @@ class reLU(Module):
         self.s = input
         return torch.clamp(self.s,min=0)
     
-    def backward_pass(self,x,dl_dx):
+    def backward_pass(self ,dl_dx):
         dreLU = float(self.s>0)
         return dreLU * dl_dx
+
+    def param(self):
+        return [self.s]
+
 
 ###################################
 ##             loss              ##
 ###################################
 
-class MSE(Module):
+class lossMSE(Module):
     
     def forward_pass(self, input, target):
         return (input - target).pow(2).sum()/input.size(0)
 
     def backward_pass(self, input, target):
         return 2 * (input - target)
+    
+    def param(self):
+        return []
+
+###################################
+##          Sequential           ##
+###################################
+
+class Sequential(Module):
+    def __init__(self, loss, *kargs):
+        self.layers = list(kargs)
+        if isinstance(self.layers[-1],lossMSE):
+            raise TypeError("Last element should not be a loss : loss already specified")
+        self.layers.append(loss)
+    
+    def __str__(self):
+        out = 'Model containing: \n'
+        for i, layer in enumerate(self.layers[:-2]):
+            out = out + ('{} : '.format(i+1)) + str(layer) + '\n'
+        out = out + 'With loss : \n' + str(self.layers[-1])
+        return out
+
+    def forward_pass(self, input):
+        next = self.layers[0].forward_pass(input)
+        for layer in self.layers:
+            next = layer.forward_pass(next)
+        loss = next
+        return loss
+    
+    def backward_pass(self, input, target, eta = 0.01):
+        out = self.layers[-1].backward_pass(input,target)
+        for layer in self.layers[-1:]:
+            out = layer.backward_pass(out)
+            if isinstance(layer,Linear) :
+                layer.gradient_step(eta)
+        return out
+    
+    def param(self):
+        out = [layer.param() for layer in self.layers]
+        return out
