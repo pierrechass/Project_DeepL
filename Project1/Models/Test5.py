@@ -91,7 +91,7 @@ class Net(nn.Module):
 
 # function to train our model (similar to the one in serie 4)
 def train_model(model, train_input, train_target, mini_batch_size, nb_epochs = 25):
-
+    model.train()
     criterion = nn.CrossEntropyLoss()
     eta = 1e-2
     optimizer = torch.optim.Adam(model.parameters(), lr = eta)
@@ -113,7 +113,7 @@ def train_model(model, train_input, train_target, mini_batch_size, nb_epochs = 2
 
 # function to compute the number of wrong estimated number (error for the number estimated)
 def compute_nb_errors_classes(model, data_input, data_target):
-
+    model.eval()
     nb_data_errors = 0
 
     for b in range(0, data_input.size(0), mini_batch_size):
@@ -131,14 +131,11 @@ def compute_nb_errors_classes(model, data_input, data_target):
 
 # function to compute the number of errors for the target (error for the choice of the biggest number)
 def compute_nb_errors_target(model, data_input, data_target):
-
+    model.eval()
     nb_data_errors = 0
-    
-    
     output = model(data_input)
     _, predicted_classes = torch.max(output, 1)
     A=data_target.size(0)
-
     for k in range(A):
         if predicted_classes[2*k]>predicted_classes[k*2+1]:
             sol=torch.tensor(0)
@@ -148,25 +145,46 @@ def compute_nb_errors_target(model, data_input, data_target):
         #print('sol',sol)
         if data_target[k] != sol:
             nb_data_errors = nb_data_errors + 1
-
     return nb_data_errors
+
 
 #######################################################################################################
 
+# function to compute the number of errors for the target (error for the choice of the biggest number)
+def compute_nb_errors_target2(model, data_input, data_target):
+    nb_data_errors = 0
+    model.eval()
+    for b in range(0, data_input.size(0), mini_batch_size):
+        output = model(data_input.narrow(0, b, mini_batch_size))
+        _, predicted_classes = torch.max(output, 1)
+        for k in range(mini_batch_size//2):
+            if predicted_classes[2*k]>predicted_classes[k*2+1]:
+                sol=torch.tensor(0)
+            else:
+                sol=torch.tensor(1)
+            #print(data_target[k])
+            #print('sol',sol)
+            if data_target[k+b//2] != sol:
+               nb_data_errors = nb_data_errors + 1
+    return nb_data_errors
+
+
+#######################################################################################################
 # MAIN Function : 
 
 mini_batch_size = 100
 mean_error_classes_test=numpy.zeros(10)  # tensor use to calculate the mean error on 10 run :
-mean_error_target_test=numpy.zeros(10)  
+mean_error_target_test=numpy.zeros(10) 
+mean_error_target_test2=numpy.zeros(10)  
 mean_error_classes_train=numpy.zeros(10)  # tensor use to calculate the mean error on 10 run :
 mean_error_target_train=numpy.zeros(10)  
 
 for k in range(10):                 # run 10 time our algorithm to get a better approximation of the performance of our model
     # Initialize and train our model
     model = Net(200)
-    model.train(True)  
+
     train_model(model, train_input, train_classes, mini_batch_size)
-    model.train(False)
+
     # Check performance on the testing set :              
     nb_test_errors_classes = compute_nb_errors_classes(model, test_input, test_classes)
     print('test error classes Net {:0.2f}% {:d}/{:d}'.format((100 * nb_test_errors_classes) / test_input.size(0),
@@ -174,10 +192,13 @@ for k in range(10):                 # run 10 time our algorithm to get a better 
     mean_error_classes_test[k]=nb_test_errors_classes
     
     nb_test_errors_target = compute_nb_errors_target(model, test_input, test_target)
-    print('test error target Net {:0.2f}% {:d}/{:d}'.format((100 * nb_test_errors_target) / test_target.size(0),
+    print('test error target 1 {:0.2f}% {:d}/{:d}'.format((100 * nb_test_errors_target) / test_target.size(0),
                                                       nb_test_errors_target, test_target.size(0)))
     mean_error_target_test[k]=nb_test_errors_target
-
+    nb_test_errors_target2 = compute_nb_errors_target2(model, test_input, test_target)
+    print('test error target 2 {:0.2f}% {:d}/{:d}'.format((100 * nb_test_errors_target2) / test_target.size(0),
+                                                      nb_test_errors_target2, test_target.size(0)))
+    mean_error_target_test2[k]=nb_test_errors_target2
 
     # Check performance on the training set : 
     nb_train_errors_classes = compute_nb_errors_classes(model, train_input, train_classes)
