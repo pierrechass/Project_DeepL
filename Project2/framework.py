@@ -1,6 +1,6 @@
 from torch import empty
+import torch
 import math as m
-import numpy as np
 
 
 ###################################
@@ -24,17 +24,13 @@ class Linear(Module) :
 
     def __init__(self, d_in, d_out, randType = 'normal', randArg1 = 0., randArg2 = 1.):
 
-        # Define bias
-        switch_b = {
-            'normal' : empty(d_out).normal_(randArg1,randArg2),
-            'uniform' : empty(d_out).uniform_(randArg1,randArg2)
-        }
-        self.b = switch_b.get(randType)
+        # Define bia
+        self.b = empty(d_out,1).zero_()
 
         # Define weights
         switch_w = {
-            'normal' : empty((d_out, d_in)).normal_(randArg1,randArg2),
-            'uniform' : empty((d_out, d_in)).uniform_(randArg1,randArg2)
+            'normal' : empty((d_out, d_in)).normal_(randArg1,randArg2).mul_(1/m.sqrt(d_in)),
+            'uniform' : empty((d_out, d_in)).uniform_(-1/m.sqrt(d_in),1/m.sqrt(d_in))
         }
         self.w = switch_w.get(randType)
 
@@ -52,10 +48,10 @@ class Linear(Module) :
         return self.w @ self.x + self.b
     
     def backward_pass(self, dl_ds):
-        self.dl_db.add_(dl_ds)
-        self.dl_dw.add_(self.dl_db.view(-1, 1).mm(self.x.view(1, -1)))
-        
-        return self.w.t()@dl_ds
+        self.dl_db = dl_ds.sum(1).view(-1,1)
+        self.dl_dw = (self.x @ dl_ds.t()).t()
+
+        return self.w.t() @ dl_ds
 
     def gradient_step(self, eta):
         self.w = self.w - eta*self.dl_dw
@@ -80,7 +76,7 @@ class tanh(Module):
 
     def forward_pass(self, input):
         self.s = input
-        return self.s
+        return self.s.tanh()
     
     def backward_pass(self, dl_dx):
         dtanh = 4 * (self.s.exp() + self.s.mul(-1).exp()).pow(-2)
@@ -98,8 +94,8 @@ class reLU(Module):
         return torch.clamp(self.s,min=0)
     
     def backward_pass(self ,dl_dx):
-        dreLU = float(self.s>0)
-        return dreLU * dl_dx
+        dreLU = self.s>0
+        return dreLU.float() * dl_dx
 
     def param(self):
         return [self.s]
@@ -112,10 +108,10 @@ class reLU(Module):
 class lossMSE(Module):
     
     def forward_pass(self, input, target):
-        return (input - target).pow(2).sum()/input.size(0)
+        return (input - target).pow(2).sum()/input.size(1)
 
     def backward_pass(self, input, target):
-        return 2 * (input - target)
+        return 2 * (input - target)/input.size(1)
     
     def param(self):
         return []
@@ -138,16 +134,16 @@ class Sequential(Module):
         out = out + 'With loss : \n' + str(self.layers[-1])
         return out
 
-    def forward_pass(self, input):
+    def forward_pass(self, input, target):
         next = self.layers[0].forward_pass(input)
-        for layer in self.layers:
+        for layer in self.layers[1:-1]:
             next = layer.forward_pass(next)
-        loss = next
-        return loss
+        loss = self.layers[-1].forward_pass(next,target)
+        return loss,next
     
     def backward_pass(self, input, target, eta = 0.01):
         out = self.layers[-1].backward_pass(input,target)
-        for layer in self.layers[-1:]:
+        for layer in reversed(self.layers[:-1]):
             out = layer.backward_pass(out)
             if isinstance(layer,Linear) :
                 layer.gradient_step(eta)

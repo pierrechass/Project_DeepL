@@ -1,43 +1,76 @@
 from utilities import utilities
 import framework as frk
 import torch
+from matplotlib import pyplot as plt
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-# lin = framework.Linear(4,1, randType = 'normal', randArg1 = 0., randArg2 = 1.)
-# sigma = framework.tanh()
-# loss = framework.MSE()
+# As required, torch.grad is disabled
+torch.set_grad_enabled(False)
 
-# util = utilities()
+# Define parameters
+eta, batch_size = 0.1,100
+epochs = 100
 
-# inp = torch.ones([4])
+# Creation of the model
+model = frk.Sequential(frk.lossMSE(), frk.Linear(2,25), frk.tanh(), frk.Linear(25,25), frk.tanh(),
+frk.Linear(25,25), frk.tanh(), frk.Linear(25,2), frk.tanh())
 
-# inp2 = torch.zeros(4)
-# inp2[0] = 1.
+# Creation of the dataset
+utile = utilities(1000,1000)
+train_data, train_labels, test_data, test_labels = utile.create_datasets(plot=False)
 
-# target = 1.
+mean, std = train_data.mean(), train_data.std()
+train_data.sub_(mean).div_(std)
+test_data.sub_(mean).div_(std)
 
-# train = util.create_datasets(plot=True)
+# Containers for the datas
+test_error = torch.empty(epochs).zero_()
+train_error = torch.empty(epochs).zero_()
+train_loss = torch.empty(epochs).zero_()
+test_loss = torch.empty(epochs).zero_()
 
-# for i in range(30):
 
-#     #lin.reset_gradients()
+for epoch in range(epochs):
+    for b in range(0,train_data.size(1),batch_size):
 
-#     print("param = ",lin.param())
-#     out = lin.forward_pass(inp2)
-#     out = sigma.forward_pass(out)
-#     loss_act = loss.forward_pass(out,target)
+        # Forward pass
+        loss, output = model.forward_pass(train_data.narrow(1,b,batch_size), train_labels.narrow(1,b,batch_size))
+        # Update train loss
+        train_loss[epoch] += loss
+        # Backward pass and optimization
+        model.backward_pass(output, train_labels.narrow(1,b,batch_size), eta=eta)
+        # Update train error
+        train_error[epoch] += utile.compute_nb_errors(output,train_labels.narrow(1,b,batch_size))
+    
+    # Update test error once the model is trained
+    _, output_test = model.forward_pass(test_data, test_labels)
+    test_error[epoch] = utile.compute_nb_errors(output_test, test_labels)
 
-#     dl_dx = loss.backward_pass(out,target)
-#     dl_ds = sigma.backward_pass(dl_dx)
-#     lin.backward_pass(dl_ds)
 
-#     lin.gradient_step(0.015)
+train_accuracy = train_error*100/test_data.size(1)
+test_accuracy = test_error*100/test_data.size(1)
 
-#     print(out)
-#     print(loss_act)
+print("Test accuracy = %.2f" %test_accuracy[-1] + "%\n")
+print("Train accuracy = %.2f" %train_accuracy[-1]+ "%\n")
 
-model = frk.Sequential(frk.lossMSE(), frk.Linear(10,10), frk.reLU(), frk.Linear(10,5), frk.reLU())
-print(model.param())
+plt.plot(test_accuracy, label = "test")
+plt.plot(train_accuracy, label = "train")
+plt.legend()
+plt.xlabel("epochs")
+plt.ylabel("Accuracy (%)")
+plt.title("Train and test accuracy during epochs : eta = %.2f, batch_size = %i\n" %(eta,batch_size)
+        + "Train accuracy = %.2f"%train_accuracy[-1] + "% " + "Test accuracy = %.2f" %test_accuracy[-1] + "%")
+plt.show()
+
+# denormalize datas and plot the output classification
+test_data.mul_(std).add_(mean)
+utile.plot_output(output_test,test_data)
+
+plt.plot(train_loss)
+plt.xlabel("epochs")
+plt.ylabel("loss")
+plt.title("evolution of the MSE loss over the epochs")
+plt.show()
 

@@ -1,1 +1,1 @@
-i
+nn.CrossEntropyLoss()
